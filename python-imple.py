@@ -34,28 +34,35 @@ move_M_inverse = np.array([[1, 0, 0, 0],
                            [0, 0, 1, -d],
                            [0, 0, 0, 1]])
 
-ILL_CHAR_MAP = ['.', ',', '-', ';', ':', ';', '=', '!', '*', '#', '$', '@']
+ILL_CHAR_MAP = ['.', ',', '-', ':', ';', '=', '!', '*', '#', '$', '@']
 
 class Point():
   def __init__(self, p) -> None:
-    self.x = p[0]
-    self.y = p[1]
-    self.z = p[2]
-  
-  # get norm of the point
-  def norm(self):
-    x, y, z = self.x, self.y - h, self.z - d
+    self.x = x = p[0]
+    self.y = y = p[1]
+    self.z = z = p[2]
+
     ratio = R / sqrt(x**2 + z**2)
-    return norm(np.array([x - x * ratio, 
+    z -= d
+    y -= h
+    self.norm = norm(np.array([x - x * ratio, 
                         y, 
                         z - z * ratio]))
+    self.norm = np.append(self.norm, [1])
+    # print(sum(self.norm**2))
+
+  
+  # get norm of the point
+  # norm is relative to the initial position of the donout, cannot be used after applying x_rotation
+  def get_norm(self):
+    return self.norm[:3]
   
   def get_distance(self):
     return sqrt(self.x**2 + self.y**2 + self.z**2)
   
   # get illuminus of the point
   def get_illuminus(self):
-    return max(-np.dot(self.norm(), light_direction), 0)
+    return max(-np.dot(self.get_norm(), light_direction), 0)
   
   # get char representing illuminus 
   def get_illumi_char(self):
@@ -63,8 +70,21 @@ class Point():
     # return str(int(illumi))
     return ILL_CHAR_MAP[int(illumi)]
 
+  # apply rotate transform to the point, including its norm
+  def rotate(self, trans_M):
+    x, y, z = self.x, self.y, self.z
+    self.x, self.y, self.z, _ = np.dot(trans_M, [x, y, z, 1])
+    n_v = np.dot(trans_M, self.norm)
+    self.norm = np.append(n_v[:3], [1])
+    # print(self.norm)
+
+  # apply move transform to the point, not apply to the norm vector
+  def move(self, trans_M):
+    x, y, z = self.x, self.y, self.z
+    self.x, self.y, self.z, _ = np.dot(trans_M, [x, y, z, 1])
+
 # file is used for debug propose, display donout to console instead
-# file = open("output.log", 'w')
+file = open("output.log", 'w')
 
 def get_image(pixels):
   # mapping value to 2d
@@ -81,7 +101,7 @@ def get_image(pixels):
        or x_index < (- canvas_width // 2) or y_index < 0:
       continue
 
-    # file.write(str(x_trans) + ' ' + str(y_trans) + '\n')
+    # file.write(str(x_trans) + ' ' + str(y_trans - 30) + '\n')
     # file.write(str(int(x_trans)) + ' ' + str(int(y_trans)) + '\n')
 
     # showing pixel visible from viewer:
@@ -116,16 +136,17 @@ def get_image(pixels):
 
 # getting (n, 4) np matrix for n points' position, 
 # return (n, 4) matrix of transformed position
-def rotate_donout(pixels_M):
-  # move donout back to origin
-  pixels_M = np.dot(pixels_M, move_M_inverse.T)
-  # rotate
-  xy_rotate_M = np.dot(x_rotate_M, y_rotate_M)
-  pixels_M = np.dot(pixels_M, xy_rotate_M.T)
+def rotate_donout(pixels):
+  for p in pixels:
+    # move donout back to origin
+    p.move(move_M_inverse)
+    # rotate
+    xy_rotate_M = np.dot(x_rotate_M, y_rotate_M)
+    p.rotate(xy_rotate_M)
 
-  # move to the view position
-  return np.dot(pixels_M, move_M.T)
-
+    # move to the view position
+    p.move(move_M)
+  return pixels
     
 # getting (n, 4) matrix, return list of n Pixels 
 def to_Pixels(pixels_M):
@@ -141,16 +162,17 @@ def main(stdscr):
   # y_rotate_M = y_rotate_M_ / sum(y_rotate_M_**2)
   for alpha in np.arange(0, 2*pi, del_theta):
     c_p = np.array([R + r * cos(alpha), r * sin(alpha), 0, 1])# pixel on the circle
+    # file.write(f'{c_p[0]} {c_p[1]}\n')
     for n in range(int(2*pi/del_theta)):
       c_p = np.dot(y_rotate_M, c_p) # pixel on the donout
       d_p = np.dot(move_M, c_p)
       pixels_M.append(d_p)
 
 
-  # for i in range(5):
-  #   pixels_M = rotate_donout(pixels_M)
+  pixels = to_Pixels(pixels_M)
+  
+  # pixels = rotate_donout(pixels)
 
-  # pixels = to_Pixels(pixels_M)
   # illuminus_matrix_2d = get_image(pixels)
   # # output to file
   # for j in range(len(illuminus_matrix_2d)): 
@@ -160,10 +182,8 @@ def main(stdscr):
   #   file.write('\n')
   # file.close()
 
-  # printing the rotating donout till program killed
+  # # printing the rotating donout till program killed
   while True:
-
-    pixels = to_Pixels(pixels_M)
     illuminus_matrix_2d = get_image(pixels)
     
     for j in range(len(illuminus_matrix_2d)): 
@@ -172,7 +192,7 @@ def main(stdscr):
       stdscr.addstr(j, 0, ''.join(line))
     stdscr.refresh()
     sleep(0.05)
-    pixels_M = rotate_donout(pixels_M)
+    pixels = rotate_donout(pixels)
 curses.wrapper(main)
 
 # main(None)
