@@ -17,4 +17,4 @@ Report PDF in Chinese is available in 'report' folder, report is based on the fi
 ## Contributing
 idea originated from https://www.youtube.com/watch?v=sW9npZVpiMI&t=163s
 referenced: Imperial College London 3rd year material https://materials.doc.ic.ac.uk/resources/2021/60021
-all code originated by Shitong Xu
+all code originated from Shitong Xu

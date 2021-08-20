@@ -1,7 +1,9 @@
 import numpy as np
-from math import pi, cos, sin, sqrt
+from math import pi, cos, sin, sqrt, acos
 from time import sleep
 import curses
+
+DEBUG = False
 
 def norm(v):
   return v / sum(v**2)**0.5
@@ -11,12 +13,12 @@ canvas_height = 50
 canvas_width = 170
 R = 100
 r = 40
-h = 100
+h = 200
 d = 1000
-del_theta = 0.05
-light_direction = np.array([0, 1, -1])
+del_theta = 0.1
+light_direction = np.array([1, -1, 1])
 light_direction = norm(light_direction)
-canvas_z = 300
+canvas_z = 100
 y_rotate_M = np.array([[cos(del_theta), 0, -sin(del_theta), 0], 
                        [0,              1,               0, 0],
                        [sin(del_theta), 0,  cos(del_theta), 0],
@@ -35,6 +37,7 @@ move_M_inverse = np.array([[1, 0, 0, 0],
                            [0, 0, 0, 1]])
 
 ILL_CHAR_MAP = ['.', ',', '-', ':', ';', '=', '!', '*', '#', '$', '@']
+ILL_INT_MAP = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '*']
 
 class Point():
   def __init__(self, p) -> None:
@@ -42,12 +45,12 @@ class Point():
     self.y = y = p[1]
     self.z = z = p[2]
 
-    ratio = R / sqrt(x**2 + z**2)
     z -= d
     y -= h
+    ratio = R / sqrt(x**2 + z**2)
     self.norm = norm(np.array([x - x * ratio, 
-                        y, 
-                        z - z * ratio]))
+                              y, 
+                              z - z * ratio]))
     self.norm = np.append(self.norm, [1])
   
   # get norm of the point
@@ -57,13 +60,21 @@ class Point():
   def get_distance(self):
     return sqrt(self.x**2 + self.y**2 + self.z**2)
   
-  # get illuminus of the point
+  # get illuminus of the point, in radius angular value
   def get_illuminus(self):
-    return max(-np.dot(self.get_norm(), light_direction), 0)
+    # return abs(np.dot(self.get_norm(), light_direction))
+    # if DEBUG:
+    #   print(np.dot(self.get_norm(), light_direction))
+    return acos(np.dot(self.get_norm(), light_direction)) / pi
   
   # get char representing illuminus 
   def get_illumi_char(self):
-    illumi = self.get_illuminus() * len(ILL_CHAR_MAP)
+    # take min to ensure value in range of ILL_CHAR_MAP
+    illumi = min(self.get_illuminus() * len(ILL_CHAR_MAP), len(ILL_CHAR_MAP)-1)
+    if DEBUG:
+      print(self.get_illuminus())
+    # if int(illumi) == 0:
+    #   print(f'{illumi}') 
     # return str(int(illumi))
     return ILL_CHAR_MAP[int(illumi)]
 
@@ -71,8 +82,7 @@ class Point():
   def rotate(self, trans_M):
     x, y, z = self.x, self.y, self.z
     self.x, self.y, self.z, _ = np.dot(trans_M, [x, y, z, 1])
-    n_v = np.dot(trans_M, self.norm)
-    self.norm = np.append(n_v[:3], [1])
+    self.norm = np.dot(trans_M, self.norm)
 
   # apply move transform to the point, not apply to the norm vector
   def move(self, trans_M):
@@ -90,29 +100,29 @@ def get_image(pixels):
     
     x_index, y_index = int(x_trans), int(y_trans)
     # ignore pixel out off canvas
-    if (x_index + canvas_width // 2) >= canvas_width or y_index >= canvas_height \
+    if x_index >= (canvas_width // 2) or y_index >= canvas_height \
        or x_index < (- canvas_width // 2) or y_index < 0:
       continue
 
     # showing pixel visible from viewer:
-    # method 1: take the point with shortest distance from origin, where the viewer lies
-    pre_point = point_matrix_2d[y_index, x_index]
+    # # method 1: take the point with shortest distance from origin, where the viewer lies
+    # pre_point = point_matrix_2d[y_index, x_index + canvas_width // 2]
 
-    if (not pre_point) or (pre_point and pre_point.get_distance() > p.get_distance()):
-      point_matrix_2d[y_index, x_index + canvas_width // 2] = p
+    # if (not pre_point) or (pre_point and pre_point.get_distance() > p.get_distance()):
+    #   point_matrix_2d[y_index, x_index + canvas_width // 2] = p
 
     # # method 2: take the surface with norm of reverse direction of the view line
     # if np.dot(np.array([x, y, z]), p.norm()) <= 0:
     #   point_matrix_2d[y_index, x_index + canvas_width // 2] = p
 
     # method 3: combine two approaches
-    # pre_point = point_matrix_2d[y_index, x_index]
+    pre_point = point_matrix_2d[y_index, x_index + canvas_width // 2]
 
-    # if np.dot(np.array([x, y, z]), p.norm()) <= 0:
-    #   # new point face the view direction
-    #   if (not pre_point) or (pre_point and pre_point.get_distance() > p.get_distance()):
-    #     # new point is closer to the viewer
-    #     point_matrix_2d[y_index, x_index + canvas_width // 2] = p
+    if np.dot(np.array([x, y, z]), p.get_norm()) <= 0:
+      # new point face the view direction
+      if (not pre_point) or (pre_point and pre_point.get_distance() > p.get_distance()):
+        # new point is closer to the viewer
+        point_matrix_2d[y_index, x_index + canvas_width // 2] = p
 
 
   # get final ouput matrix by getting illuminus from each point
@@ -159,14 +169,26 @@ def main(stdscr):
   pixels = to_Pixels(pixels_M)
 
   # printing the rotating donout till program killed
-  while True:
-    illuminus_matrix_2d = get_image(pixels)
+  if DEBUG:
+    for i in range(1):
+      illuminus_matrix_2d = get_image(pixels)
     
-    for j in range(len(illuminus_matrix_2d)): 
-      line = illuminus_matrix_2d[j]
-      stdscr.addstr(j, 0, ''.join(line))
-    stdscr.refresh()
-    sleep(0.05)
-    pixels = rotate_donout(pixels)
+      for j in range(len(illuminus_matrix_2d)): 
+        line = illuminus_matrix_2d[j]
+      pixels = rotate_donout(pixels)
+  else:
+    while True:
+      illuminus_matrix_2d = get_image(pixels)
+      
+      for j in range(len(illuminus_matrix_2d)): 
+        line = illuminus_matrix_2d[j]
+        stdscr.addstr(j, 0, ''.join(line))
+      stdscr.refresh()
+      pixels = rotate_donout(pixels)
 
-curses.wrapper(main)
+
+if DEBUG:
+  main(None)
+else:
+  curses.wrapper(main)
+
