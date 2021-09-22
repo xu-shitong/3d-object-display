@@ -11,7 +11,7 @@ run `python3 donut-to-view-imple.py` in root directory of the project will displ
 (Working In Progress)
 run `python3 view-to-donut-imple.py` will execute the second program that do the same thing as the first one, but this use a different implementation. 
 
-If you are interested in the detailed difference: The first program take samples from the donut and map to the canvas, while this program take sample from donut where lies in the 'sight' of the canvas. The second algorithm is expected to take less time and display more accurately. 
+If you are interested in the detailed difference: The first implementation take samples from the donut and map to the canvas, while the second improved implementation take sample from donut where lies in the same 'sight line' of the canvas pixel and observer. The second algorithm is expected to take less time and display more accurately. 
 
 Report PDF in Chinese is available in 'report' folder, report is based on the first implementation.
 
